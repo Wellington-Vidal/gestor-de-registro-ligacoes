@@ -189,9 +189,9 @@ This project includes code from:
                         <div class="menu">
                             <div id="div-arquivos">Arquivos
                                 <div class="submenu">
-                                    <div>Importar CSV (Novos Registros)</div>
-                                    <div>Importar CSV (Atualizar Registros)</div>
-                                    <div>Exportar CSV (Novos Registros)</div>
+                                    <div onclick="document.getElementById('arquivo').click();">Importar CSV (Novos Registros)</div>
+                                    <div onclick="alert('Em Desenvolvimento!')">Importar CSV (Atualizar Registros)</div>
+                                    <div onclick="ExportaSelecionados()">Exportar CSV (Novos Registros)</div>
                                 </div>
                             </div>
                             <div id="div-limpar" onclick="Limpar()">Limpar</div>
@@ -224,6 +224,7 @@ This project includes code from:
                         </div>
                     </div>
                 </div>
+                <input type="file" id="arquivo" onchange="ImportaNovosRegistrosCSV()" style="display: none;">
             </form>
 
             <div class="div-tabela">
