@@ -410,10 +410,10 @@ function FiltraDados()
     let valoresCampos = [null, 
                          txtFiltroNum.value, 
                          txtFiltroData.value,
-                         txtFiltroProposito.value,
-                         txtFiltroOrigem.value,
-                         txtFiltroDestino.value, 
-                         txtFiltroCliente.value, 
+                         txtFiltroProposito.value.toUpperCase(),
+                         txtFiltroOrigem.value.toUpperCase(),
+                         txtFiltroDestino.value.toUpperCase(), 
+                         txtFiltroCliente.value.toUpperCase(), 
                          txtFiltroTelefones.value, 
                          selFiltroSituacao.value];
 
@@ -697,6 +697,7 @@ function GerarQrCodeSelecao()
             const transaction = db.transaction([tabelaRegistroLigacoes], "readonly");
             const objectStore = transaction.objectStore(tabelaRegistroLigacoes);
             let dadosQrCode = "";
+            let qtd = 0;
 
             objectStore.openCursor().onsuccess = function(event){
                 var cursor = event.target.result;
@@ -711,13 +712,15 @@ function GerarQrCodeSelecao()
                         }
 
                         dadosQrCode = dadosQrCode + `id:${cursor.value.id}|data:${cursor.value.data}|proposito:${cursor.value.proposito}|origem:${cursor.value.origem}|destino:${cursor.value.destino}|cliente:${cursor.value.cliente}|telefones:${cursor.value.telefones}|situacao:${cursor.value.situacao}`;
+                        qtd++;
                     }
 
                     cursor.continue();
                 }
 
-                if (dadosQrCode.length <= 4000)
+                if ((dadosQrCode.length <= 4000) && (qtd == listaIdsSelecionados.length))
                 {
+                    qtd++;
                     GeraQrCode(dadosQrCode);
                 }
             }
@@ -749,4 +752,238 @@ function SelecionaTodos()
         alert('Erro ao selecionar!');        
     }
 
+}
+
+function ImportaNovosRegistrosCSV()
+{
+    try 
+    {
+        let arquivo = document.getElementById('arquivo');
+        let delimitador = prompt("Informe o Delimitador de Colunas do Arquivo. Ex: ( ; ) ( , ) ( | )", ";");
+        let colunasObjeto = ['Data', 'Procedimento', 'Solicitante', 'Executante', 'Paciente', 'Telefones'];
+        let dadosAgendamentos = [];
+        let indiceColunas = [];
+
+        if (delimitador != '')
+        {
+            var leitor = new FileReader();
+
+            leitor.onload = function () {
+                let agendamentos = leitor.result.split('\n');
+            
+                for (let a = 0 ; a < agendamentos.length ; a++)
+                {
+                    if (agendamentos[a] != '')
+                    {
+                        let colunas = agendamentos[a].split(delimitador);
+
+                        if (colunas.length < 6)
+                        {
+                            alert("O arquivo anexado precisa possuir pelo menos 6 colunas, para os seguintes dados: \n\nData (10 caracteres)\nOrigem/Solicitante (1 caractere ou maior)\nCliente/Paciente (1 caractere ou maior)\nPropósito/Procedimento (1 caractere ou maior)\nDestino/Executante (1 caractere ou maior)\nTelefones (Separados por /)");
+                            alert("Colunas: " + colunas.length + "\n\n" + colunas);
+                            return;
+                        }
+        
+                        if (a == 0)
+                        {
+                            let colunasNumeracoes = ColunasNumeracoes(colunas);
+                            
+                            alert("O arquivo anexado possui " + colunas.length + " coluna(s). A primeira linha do arquivo possui as seguintes colunas com suas numerações: \n\n" + colunasNumeracoes + "\nResponda com o número da coluna as próximas perguntas!");
+                            
+                            for (let c = 0 ; c < colunasObjeto.length ; c++)
+                            {
+                                let indice = prompt("Colunas/Numerações: \n" + colunasNumeracoes + "\nColuna: " + colunasObjeto[c] + "\n\nInforme o indice de 1 a " + colunas.length);
+                                indiceColunas.push(indice - 1);
+                            }
+                        }
+                        else
+                        {
+                            let agendamento = {};
+
+                            for (let c = 0 ; c < indiceColunas.length ; c++)
+                            {
+                                agendamento[colunasObjeto[c]] = colunas[indiceColunas[c]];
+                            }
+
+                            dadosAgendamentos.push(agendamento);
+                        }
+                    }
+                }
+
+                console.log(dadosAgendamentos);
+                let agendamentosFormatados = FormataDadosImportacao(dadosAgendamentos);
+                console.log(agendamentosFormatados);
+
+                //REGISTRA DADOS NO BANCO DE DADOS
+                for (let a = 0 ; a < agendamentosFormatados.length ; a++)
+                {
+                    RegistraContatoLigacao(agendamentosFormatados[a]);
+                }
+
+                ListaRegistrosLigacoes();
+                FiltraDados();
+                alert("Registros Cadastrados com Sucesso!\n" + "Total: " + agendamentosFormatados.length);
+            };
+    
+            leitor.readAsText(arquivo.files[0], 'UTF-8');
+        }
+        else
+        {
+            alert("Nenhum Delimitador foi informado!");
+        }
+    } 
+    catch (error) 
+    {
+        console.log(error);
+    }
+}
+
+function ColunasNumeracoes(colunas)
+{
+    let colunasNumeracoes = "";
+
+    try 
+    {
+        if (Array.isArray(colunas))
+        {
+            for (let c = 0 ; c < colunas.length ; c++)
+            {
+                colunasNumeracoes = colunasNumeracoes + 'N: ' + (c+1) + ' - ' + colunas[c] + "\n";
+            }
+        }
+    }
+    catch (error) 
+    {
+        console.log(error);
+    }
+
+    return colunasNumeracoes;
+}
+
+function FormataDadosImportacao(agendamentos)
+{
+    let colunasObjeto = ['Data', 'Procedimento', 'Solicitante', 'Executante', 'Paciente', 'Telefones'];
+
+    for (let a = 0 ; a < agendamentos.length ; a++)
+    {
+        agendamentos[a].Data = agendamentos[a].Data.substr(0, 10).replace(/\//g, '-');
+        agendamentos[a].Procedimento = agendamentos[a].Procedimento.toUpperCase();
+        agendamentos[a].Solicitante = agendamentos[a].Solicitante.toUpperCase();
+        agendamentos[a].Executante = agendamentos[a].Executante.toUpperCase();
+        agendamentos[a].Paciente = agendamentos[a].Paciente.toUpperCase();
+
+        for (let c = 0 ; c < colunasObjeto.length ; c++)
+        {
+            //APAGA OS SEPARADORES: |, /, ; DE TODOS OS CAMPOS, EXCETO TELEFONES
+            if (colunasObjeto[c] != 'Telefones')
+            {
+                agendamentos[a][colunasObjeto[c]] = agendamentos[a][colunasObjeto[c]].replace(/;|\|\//g, '');
+            }
+        }
+    }
+
+    return agendamentos;
+}
+
+function RegistraContatoLigacao(agendamento)
+{
+    //indexedDB
+    const transaction = db.transaction([tabelaRegistroLigacoes], "readwrite");
+    const objectStore = transaction.objectStore(tabelaRegistroLigacoes);
+
+    const novoRegistro = {
+        data: agendamento.Data,
+        proposito: agendamento.Procedimento,
+        origem: agendamento.Solicitante,
+        destino: agendamento.Executante, 
+        cliente: agendamento.Paciente, 
+        telefones: agendamento.Telefones, 
+        situacao: "Pendente"
+    }
+
+    const request = objectStore.add(novoRegistro);
+
+    transaction.oncomplete = (event) => {
+        console.log("oncomplete", event);
+        console.log("Registro Cadastrado com Sucesso!");
+    };
+    
+    transaction.onerror = (event) => {
+        console.log("onerror", event);
+    };
+}
+
+function ExportaSelecionados()
+{
+    try
+    {
+        let tabela = document.getElementById('tabela');
+        let trs = tabela.getElementsByTagName('tr');
+        let listaIdsSelecionados = [];
+        
+        //ADICIONA IDs SELECIONADOS
+        for (let i = 2 ; i < trs.length ; i++)
+        {
+            let tds = trs[i].getElementsByTagName('td');
+
+            if ((tds[0]) && (tds[0].getElementsByTagName('input').length > 0))
+            {
+                let listaInputs = tds[0].getElementsByTagName('input');
+
+                if ((listaInputs[0].getAttribute('type') == 'checkbox') && (listaInputs[0].checked))
+                {
+                    listaIdsSelecionados.push(tds[1].innerHTML * 1);
+                }
+            }
+        }
+
+        //BUSCA NO BANCO DE DADOS E FILTRA OS IDs SELECIONADOS
+        if (listaIdsSelecionados.length > 0)
+        {
+            const transaction = db.transaction([tabelaRegistroLigacoes], "readonly");
+            const objectStore = transaction.objectStore(tabelaRegistroLigacoes);
+            let dadosRelatorio = "ID;DATA;PROCEDIMENTO;SOLICITANTE;EXECUTANTE;PACIENTE;TELEFONES;SITUACAO";
+            let qtd = 0;
+
+            objectStore.openCursor().onsuccess = function(event){
+                var cursor = event.target.result;
+        
+                if (cursor)
+                {
+                    if (listaIdsSelecionados.indexOf(cursor.value.id * 1) > -1)
+                    {
+                        dadosRelatorio = dadosRelatorio + "\n";
+                        dadosRelatorio = dadosRelatorio + `${cursor.value.id};${cursor.value.data};${cursor.value.proposito};${cursor.value.origem};${cursor.value.destino};${cursor.value.cliente};${cursor.value.telefones};${cursor.value.situacao}`;
+                        qtd++;
+                    }
+
+                    cursor.continue();
+                }
+
+                if (qtd == listaIdsSelecionados.length)
+                {
+                    //GERA RELATORIO
+                    let dataHoje = PegaDataHojeFormatada().replace(/\//g, "_");
+                    let nomeRelatorio = 'Gestor_Registro_Ligacoes_' + dataHoje + '.csv';
+
+                    //Exporta Arquivo
+                    var elemento = document.createElement('a');
+                    elemento.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(dadosRelatorio));
+                    elemento.setAttribute('download', nomeRelatorio);
+
+                    elemento.style.display = 'none';
+                    document.body.appendChild(elemento);
+
+                    elemento.click();
+
+                    document.body.removeChild(elemento);
+                    qtd++;
+                }
+            }
+        }
+    }
+    catch (error)
+    {
+        console.log(error);
+    }
 }
